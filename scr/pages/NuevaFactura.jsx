@@ -8,8 +8,10 @@ import axiosInstance from '../utils/api';
 import { TouchableOpacity } from 'react-native';
 
 const NuevaFactura = ({ route, navigation }) => {
+  const { idfactura, opcion } = route.params || {};
+  const [concepto, setConcepto] = useState(''); 
   const [invoice, setInvoice] = useState('');
-  const [rows, setRows] = useState([{ cantidad: '', producto: '', precio: '', valor: '' }]);
+  const [rows, setRows] = useState([{ cantidad: '', producto: '', precio: '', valor: '',impuesto: '' }]);
   const [loading, setLoading] = useState(false);
   const [clientes, setClientes] = useState([]);
 
@@ -19,8 +21,6 @@ const [por_impuesto, setPorImpuesto] = useState(0);
 const [valcontado, setValcontado] = useState(0);
 const [valanticipo, setValanticipo] = useState(0);
 const [valcredito, setValcredito] = useState(0);
-const [subtotalcer, setsubtotalcer] = useState(0);
-const [subtotalimp, setSubtotalimp] = useState(0);
 const [valtarjetacre, setValtarjetacre] = useState(0);
 const [valtarjetadeb, setValtarjetadeb] = useState(0);
 const [pordescuento, setPordescuento] = useState(0);
@@ -47,48 +47,126 @@ const [cliente, setCliente] = useState('');
   const [searchTermC, setSearchTermC] = useState(''); // Estado para el término de búsqueda
   const [filteredProducts, setFilteredProducts] = useState([]); // Estado para productos filtrados
   const [filteredClientes, setFilteredClientes] = useState([]); // Estado para productos filtrados
-  const [totals, setTotals] = useState({ subtotal: 0, iva: 0, total: 0 });
+  const [totals, setTotals] = useState({ subtotal: 0, iva: 0, total: 0,subtotalimp: 0,subtotalcer: 0 });
   
   
-  
+  const [isLoading, setIsLoading] = useState(false);
+
   useEffect(() => {
-    const numeofactura = async () => {
+    if (opcion === 'editar' && idfactura) {
+      setIsLoading(true);
+       console.log('Respuesta API:', idfactura);
+      // Llamar API para obtener datos de la factura por número
+      axiosInstance.get(`/sige/factura_cliente_list/${idfactura}/`) // Ajusta la URL según tu API
+        .then(response => {
+          const factura = response.data;
+           console.log('datos  factura:', factura);
+          // Aquí asigna los datos recibidos a los estados correspondientes
+          setNumero(factura.i502_numero);
+          setFecha(factura.i502_fec_emision);
+          setCliente(factura.i502_cliente);
+          
+          setSearchTermC(factura.nombre_cliente || '');
+          setVendedor(factura.i502_vendedor);
+          setObservacion(factura.i502_observacion);
+          setAnulado(factura.i502_anulado);
+          setBloqueado(factura.i502_bloqueado);
+          setValidado(factura.i502_validado);
+          setBorrador(factura.i502_borrador);
+          setResponsable(factura.i502_responsable);
+          setValcontado(factura.i502_val_contado);
+          setValcredito(factura.i502_val_credito);
+          setValcheque(factura.i502_val_cheque);
+          setValtarjetacre(factura.i502_val_tarjeta_cre);
+          setValtarjetadeb(factura.i502_val_tarjeta_deb);
+          setValdescuento(factura.i502_val_descuento);
+          setPordescuento(factura.i502_por_descuento);
+          setValanticipo(factura.i502_val_anticipo);
+          setPorImpuesto(factura.i502_por_impuesto_iva);
+          setDocumento(factura.i502_documento);
+          setTotals({
+                subtotal: factura.i502_subtotal ,
+                iva: factura.i502_val_impuesto_iva || 0,
+                total: factura.i502_total || 0,
+                subtotalimp: factura.i502_subtotal_imp || 0,
+                subtotalcer: factura.i502_subtotal_cer || 0,
+              });
+
+          // Cargar detalles (rows)
+          console.log(totals)
+          if (factura.detalles && factura.detalles.length > 0) {
+            const detallesFormateados = factura.detalles.map(det => ({
+              cantidad: det.i503_cantidad.toString(),
+              producto: det.i503_producto,
+              precio: det.i503_precio.toString(),
+              valor: det.i503_valor.toString(),
+              impuesto: det.i503_impuesto.toString(),
+            }));
+            setRows(detallesFormateados);
+          }
+          setIsLoading(false);
+        })
+        .catch(error => {
+          console.error('Error al cargar factura:', error);
+          setIsLoading(false);
+        });
+    } else {
+      // Si no es edición, obtener siguiente número de factura
+      const obtenerNumero = async () => {
         try {
           const response = await axiosInstance.post('/sige/nrofactura/', {
-             documento: documento, // Usar el documento seleccionado
+            documento: documento,
           });
           setNumero(response.data.siguiente_numero);
-          
         } catch (err) {
-          setError('Error al obtener el siguiente número');
           console.error(err);
         }
-     
-    };
+      };
+      obtenerNumero();
+    }
+  }, [idfactura, opcion]);
 
-    numeofactura();
-  }, []);
+useEffect(() => {
+  if (clientes.length > 0 && cliente) {
+    const clienteEncontrado = clientes.find(c => c.i501_ruc === cliente);
+    if (clienteEncontrado) {
+      setSearchTermC(clienteEncontrado.i501_nombre);
+    }
+  }
+}, [clientes, cliente])
+
+const calculateTotals = (rowsToCalculate = rows) => {
+  let subtotalimp = 0;
+  let subtotalcer = 0;
+  rowsToCalculate.forEach(row => {
+    const cantidad = parseFloat(row.cantidad) || 1;
+    const precio = parseFloat(row.precio) || 0;
+    const impuesto = parseInt(row.impuesto) || 0;
+    if (impuesto === 1) {
+      subtotalimp += cantidad * precio;
+    } else {
+      subtotalcer += cantidad * precio;
+    }
+  });
+  const iva = subtotalimp * 0.15; // 15% IVA solo sobre subtotal con impuesto
+  const subtotal = subtotalimp + subtotalcer;
+  const total = subtotal + iva;
+  return { subtotal, iva, total, subtotalimp, subtotalcer };
+};
 
   const handleInputChange = (index, field, value) => {
-    const newRows = [...rows];
-    newRows[index][field] = value;
-    setRows(newRows);
+  const newRows = [...rows];
+  newRows[index][field] = value;
+  setRows(newRows);
 
-    // Filtrar productos cuando se cambia el texto
-    if (field === 'producto') {
-      setSearchTerm(value);
-      const filtered = productos.filter(producto =>
-        producto.i301_nombre.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredProducts(filtered);
-    }
-     if (field === 'precio' ) {
-      const { subtotal, iva, total } = calculateTotals(newRows);
-      setTotals({ subtotal, iva, total });
-      newRows[index]['valor'] = value;
-      newRows[index]['cantidad'] = 1;
-    }
-  };
+  if (field === 'precio' || field === 'cantidad' || field === 'impuesto') {
+    const { subtotal, iva, total, subtotalimp, subtotalcer } = calculateTotals(newRows);
+    setTotals({ subtotal, iva, total, subtotalimp, subtotalcer });
+  }
+};
+
+
+
 
   useEffect(() => {
     const clienteslist = async () => {
@@ -136,26 +214,16 @@ const [cliente, setCliente] = useState('');
 
   const resetForm = () => {
     setInvoice('');
-    setRows([{ cantidad: '', producto: '', precio: '', valor: '' }]);
+    setRows([{ cantidad: '', producto: '', precio: '', valor: '',impuesto:'' }]);
     setSearchTerm(''); // Resetear el término de búsqueda
     setFilteredProducts([]); // Limpiar productos filtrados
   };
 
   const addRow = () => {
-    setRows([...rows, { cantidad: '1', producto: '', precio: '', valor: '' }]);
+    setRows([...rows, { cantidad: '1', producto: '', precio: '', valor: '',impuesto:'' }]);
   };
 
-  const calculateTotals = () => {
-    let subtotal = 0;
-    rows.forEach(row => {
-      const cantidad = parseFloat(row.cantidad) || 1;
-      const precio = parseFloat(row.precio) || 0;
-      subtotal += cantidad * precio;
-    });
-    const iva = subtotal * 0.15; // 15% of IVA
-    const total = subtotal + iva;
-    return { subtotal, iva, total };
-  };
+ 
 
   const handleclienteChange = (value) => {
     
@@ -166,8 +234,8 @@ const [cliente, setCliente] = useState('');
       setFilteredClientes(filteredC);
     
   };
-
-  const { subtotal, iva, total } = calculateTotals();
+ 
+  
 
    const handleSubmit = async () => {
     
@@ -192,8 +260,8 @@ const [cliente, setCliente] = useState('');
     formData.append('i502_val_cheque', valcheque);
     formData.append('i502_val_tarjeta_cre', valtarjetacre);
     formData.append('i502_val_tarjeta_deb', valtarjetadeb);
-    formData.append('i502_subtotal_imp', subtotalimp);
-    formData.append('i502_subtotal_cer', subtotalcer);
+    formData.append('i502_subtotal_imp', totals.subtotalimp);
+    formData.append('i502_subtotal_cer', totals.subtotalcer);
     formData.append('i502_val_descuento', valdescuento);
     formData.append('i502_por_descuento', pordescuento);
 
@@ -274,6 +342,8 @@ const [cliente, setCliente] = useState('');
           };
       };
 
+      const { subtotal, iva, total, subtotalimp, subtotalcer } = totals;
+
 
   return (
     <ScrollView style={styles.container}>
@@ -337,6 +407,7 @@ const [cliente, setCliente] = useState('');
                   <TouchableOpacity onPress={() => {
                     const newRows = [...rows];
                     newRows[index].producto = item.i301_codigo; // Asigna el nombre del producto
+                    newRows[index].impuesto = item.i301_impuesto; // Asigna el nombre del producto
                     newRows[index].precio = item.i301_pre_lista; // Asigna el precio del producto
                     
                     setRows(newRows);
@@ -358,11 +429,21 @@ const [cliente, setCliente] = useState('');
           
           </View>
         ))}
+        <View>
+          <TextInput
+            style={styles.coceptoInput}
+            placeholder="Concepto"
+            value={concepto}
+            onChangeText={setConcepto}
+          />
+        </View>
+
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={addRow} style={styles.iconButton}>
             <Icon name="plus" size={16} color="#031578" />
           </TouchableOpacity>
         </View>
+
       </View>
       <View style={styles.totals}>
       <View style={styles.subtotals}>
@@ -378,7 +459,7 @@ const [cliente, setCliente] = useState('');
       </View>
     </ScrollView>
   );
-};
+}
 
 
 const styles = StyleSheet.create({
@@ -513,6 +594,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   serviceInput: {
+    flex: 1, // Ocupa todo el espacio disponible
+    height: 40,
+    fontSize: 12,
+    paddingHorizontal: 4,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 4,
+    
+  },
+  coceptoInput: {
     flex: 1, // Ocupa todo el espacio disponible
     height: 40,
     fontSize: 12,

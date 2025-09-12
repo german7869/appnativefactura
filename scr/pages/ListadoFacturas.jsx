@@ -5,6 +5,7 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import logodr from '../../assets/logodr.png';
 import axiosInstance from '../utils/api';
+
 const ListadoFacturas = ({ navigation }) => {
   const [data, setData] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null); // ahora es Date o null
@@ -39,8 +40,8 @@ const ListadoFacturas = ({ navigation }) => {
       setSelectedDate(selected);
     }
   };
-  const handleEdit = (documento) => {
-    navigation.navigate('EditFactura', { documento });
+  const handleEdit = (idfactura) => {
+     navigation.navigate('NuevaFactura', { idfactura, opcion: 'editar' });
   };
   const handleDownloadPDF = (documento) => {
     console.log('Download PDF for:', documento);
@@ -61,7 +62,7 @@ const ListadoFacturas = ({ navigation }) => {
       {/* Logo y razón social */}
       <View style={styles.titleContainer}>
         <Image source={logodr} style={styles.icon} />
-        <Text style={styles.razonSocial}>Razón Social Aquí</Text>
+        <Text style={styles.razonSocial}>   Dr. Henry Cabrera</Text>
       </View>
       {/* Selector de fecha y botón filtrar */}
       <View style={styles.buscarContainer}>
@@ -110,7 +111,7 @@ const ListadoFacturas = ({ navigation }) => {
                   <View style={styles.rowFactura}>
                 {/* Iconos a la izquierda */}
                 <View style={styles.iconosContainer}>
-                  <TouchableOpacity onPress={() => handleEdit(documento)} style={styles.iconButton}>
+                  <TouchableOpacity onPress={() => handleEdit(documento.i502_id)} style={styles.iconButton}>
                     <Icon name="edit" size={20} color="#000" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => handleDownloadPDF(documento)} style={styles.iconButton}>
@@ -154,10 +155,14 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
    razonSocial: {
-    fontSize: 18,
+    fontSize: 21,
     fontWeight: 'bold',
-    marginLeft: 10,
-    color: '#031578',
+    marginLeft: 6,
+    color: '#ccc',
+    backgroundColor: '#415cf8ff',
+    height: 50,
+    width: 220,
+    borderRadius:8,
   },
   buscarContainer: {
     flexDirection: 'row',

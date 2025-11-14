@@ -154,16 +154,7 @@ const calculateTotals = (rowsToCalculate = rows) => {
   return { subtotal, iva, total, subtotalimp, subtotalcer };
 };
 
-  const handleInputChange = (index, field, value) => {
-  const newRows = [...rows];
-  newRows[index][field] = value;
-  setRows(newRows);
-
-  if (field === 'precio' || field === 'cantidad' || field === 'impuesto') {
-    const { subtotal, iva, total, subtotalimp, subtotalcer } = calculateTotals(newRows);
-    setTotals({ subtotal, iva, total, subtotalimp, subtotalcer });
-  }
-};
+ 
 
 
 
@@ -235,9 +226,34 @@ const calculateTotals = (rowsToCalculate = rows) => {
     
   };
  
+const handleInputChange = (index, field, value) => {
+  const newRows = [...rows];
+  newRows[index][field] = value;
+  setRows(newRows);
+  
+  if (field === 'producto') {
+    setSearchTerm(value);
+    const filteredP = productos.filter(producto =>
+      producto.i301_nombre.toLowerCase().includes(value.toLowerCase())
+    );
+    setFilteredProducts(filteredP);
+  }
+  // Actualizar valor cuando cambia precio o cantidad
+  if (field === 'precio' || field === 'cantidad') {
+    const cantidad = parseFloat(newRows[index].cantidad) || 1;
+    const precio = parseFloat(newRows[index].precio) || 0;
+    newRows[index].valor = (cantidad * precio).toString();
+    setRows(newRows); // Actualizar rows con el nuevo valor
+  }
+  if (field === 'precio' || field === 'cantidad' || field === 'impuesto') {
+
+    const { subtotal, iva, total, subtotalimp, subtotalcer } = calculateTotals(newRows);
+    setTotals({ subtotal, iva, total, subtotalimp, subtotalcer });
+  }
+};
   
 
-   const handleSubmit = async () => {
+const handleSubmit = async () => {
     
     if (parseFloat(total) <= 0) {
       setError('El total debe y el total haber deben ser iguales.');
@@ -264,7 +280,6 @@ const calculateTotals = (rowsToCalculate = rows) => {
     formData.append('i502_subtotal_cer', totals.subtotalcer);
     formData.append('i502_val_descuento', valdescuento);
     formData.append('i502_por_descuento', pordescuento);
-
     formData.append('i502_val_anticipo', valanticipo);
     formData.append('i502_por_impuesto_iva', por_impuesto);
     
@@ -289,42 +304,44 @@ const calculateTotals = (rowsToCalculate = rows) => {
         if (response.data && response.data.i502_id) {
           setIdecreado(response.data.i502_id);
           console.log('i502_id:', response.data.i502_id);
-          // si HAN INGRESADO CTA DE BANCO GRABA MOVIMIENTOS CHeque
+          
                     
-           const detailPromises = rows.map(async (item,index) => {
-           try {
-        const responsedet = await axiosInstance.post(`/sige/detalle_venta_list/`, {
-          i503_factura: response.data.i502_id,
-          i503_producto: item.producto,
-          i503_cantidad: item.cantidad,
-          i503_valor: item.valor,
-          i503_precio_lis: item.precio,
-          i503_precio: item.precio,
-          i503_bodega: '01',
-          i503_cos_real:  0,
-          i503_impuesto: 1,
-          i503_unidad_medida: 'UNI',
-          i503_sec_ingreso:1,
-          i503_val_descuento:0,
-          i503_por_descuento:0
-            });
-        return responsedet.data; // o lo que necesites retornar
-              } catch (error) {
-        if (error.response) {
-          console.log(`Error en detalle ${index} - status:`, error.responsedet.status);
-          console.log(`Error en detalle ${index} - data:`, error.responsedet.data);
-        } else if (error.request) {
-          console.log(`Error en detalle ${index} - no response:`, error.request);
-        } else {
-          console.log(`Error en detalle ${index} - message:`, error.message);
+             const detailPromises = rows.map(async (item, index) => {
+        try {
+          const responsedet = await axiosInstance.post(`/sige/detalle_venta_list/`, {
+            i503_factura: response.data.i502_id,
+            i503_producto: item.producto,
+            i503_cantidad: item.cantidad,
+            i503_valor: item.valor,
+            i503_precio: item.precio,
+            i503_bodega: '01',
+            i503_impuesto: item.impuesto,  // Usar el impuesto del row
+            i503_unidad_medida: 'UNI',
+            i503_val_descuento: 0,
+            i503_por_descuento: 0
+          });
+          // Remover la verificación incorrecta de 'ok' ya que axios no tiene esa propiedad
+          return responsedet.data;
+        } catch (error) {
+          if (error.response) {
+            console.log(`Error en detalle ${index} - status:`, error.response.status);
+            console.log(`Error en detalle ${index} - data:`, error.response.data);
+          } else if (error.request) {
+            console.log(`Error en detalle ${index} - no response:`, error.request);
+          } else {
+            console.log(`Error en detalle ${index} - message:`, error.message);
+          }
+          throw error;
         }
-        // Opcional: puedes lanzar el error para que Promise.all falle o manejarlo aquí
-        throw error; // o return null para continuar con otros
-              }
-              });
+      });
               await Promise.all(detailPromises);
                     
-            } 
+            }  
+          
+            // Mostrar alerta de éxito y navegar al listado
+            Alert.alert('Éxito', 'Grabado con éxito', [
+              { text: 'OK', onPress: () => navigation.navigate('ListadoFacturas') } // Asumiendo que el nombre de la pantalla es 'ListadoFacturas'
+            ]);
           
             }
         catch (error) {
@@ -339,8 +356,11 @@ const calculateTotals = (rowsToCalculate = rows) => {
               // Otro error
               console.log('Error', error.message);
             }
+            // Mostrar alerta de error
+            Alert.alert('Error', 'Hubo un error al guardar la factura. Intente nuevamente.');
           };
       };
+
 
       const { subtotal, iva, total, subtotalimp, subtotalcer } = totals;
 
@@ -396,8 +416,9 @@ const calculateTotals = (rowsToCalculate = rows) => {
             <TextInput
               style={styles.serviceInput}
               placeholder="Servicio"
-              value={row.producto}
+              value={searchTerm}
               onChangeText={(value) => handleInputChange(index, 'producto', value)}
+              multiline={true} 
             />
             {searchTerm && (
               <FlatList
@@ -409,9 +430,11 @@ const calculateTotals = (rowsToCalculate = rows) => {
                     newRows[index].producto = item.i301_codigo; // Asigna el nombre del producto
                     newRows[index].impuesto = item.i301_impuesto; // Asigna el nombre del producto
                     newRows[index].precio = item.i301_pre_lista; // Asigna el precio del producto
-                    
+                    newRows[index].valor = item.i301_pre_lista; // Asigna el precio del producto
+                    newRows[index].cantidad = 1; // Asigna el precio del producto
+
                     setRows(newRows);
-                    setSearchTerm(''); // Limpiar el término de búsqueda
+                    setSearchTerm(item.i301_nombre); // Limpiar el término de búsqueda
                     setFilteredProducts([]); // Limpiar productos filtrados
                   }}>
                     <Text>{item.i301_nombre}</Text>
@@ -595,13 +618,16 @@ const styles = StyleSheet.create({
   },
   serviceInput: {
     flex: 1, // Ocupa todo el espacio disponible
-    height: 40,
+    minHeight: 40,  // Altura mínima para empezar
+    maxHeight: 80,  // Altura máxima para evitar que crezca demasiado
     fontSize: 12,
     paddingHorizontal: 4,
     borderColor: '#ccc',
     borderWidth: 1,
     borderRadius: 4,
-    
+    textAlignVertical: 'top',  // Alinea el texto arriba si es multiline
+    minWidth:120,
+    maxWidth:250,
   },
   coceptoInput: {
     flex: 1, // Ocupa todo el espacio disponible

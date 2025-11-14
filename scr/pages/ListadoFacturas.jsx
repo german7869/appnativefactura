@@ -9,6 +9,7 @@ import axiosInstance from '../utils/api';
 const ListadoFacturas = ({ navigation }) => {
   const [data, setData] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null); // ahora es Date o null
+  const [searchText, setSearchText] = useState(''); // nuevo estado para búsqueda por texto
   const [filteredData, setFilteredData] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [vistoIds, setVistoIds] = useState(new Set()); // para marcar vistos
@@ -25,14 +26,19 @@ const ListadoFacturas = ({ navigation }) => {
     };
     fetchData();
   }, []);
-  const filterItemsByDate = () => {
+  const applyFilters = () => {
+    let filtered = data;
     if (selectedDate) {
       const dateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      const filtered = data.filter(item => item.i502_fec_emision.startsWith(dateStr));
-      setFilteredData(filtered);
-    } else {
-      setFilteredData(data);
+      filtered = filtered.filter(item => item.i502_fec_emision.startsWith(dateStr));
     }
+    if (searchText) {
+      filtered = filtered.filter(item =>
+        item.nombre_cliente.toLowerCase().includes(searchText.toLowerCase()) ||
+        item.i502_numero.toString().includes(searchText)
+      );
+    }
+    setFilteredData(filtered);
   };
   const onChangeDate = (event, selected) => {
     setShowDatePicker(Platform.OS === 'ios'); // en android se cierra al seleccionar
@@ -64,14 +70,20 @@ const ListadoFacturas = ({ navigation }) => {
         <Image source={logodr} style={styles.icon} />
         <Text style={styles.razonSocial}>   Dr. Henry Cabrera</Text>
       </View>
-      {/* Selector de fecha y botón filtrar */}
+      {/* Selector de fecha, búsqueda por texto y botón filtrar */}
       <View style={styles.buscarContainer}>
         <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateInput}>
           <Text style={{ color: selectedDate ? '#000' : '#999' }}>
             {selectedDate ? selectedDate.toISOString().split('T')[0] : 'Seleccione fecha'}
           </Text>
         </TouchableOpacity>
-        <Button title="Filtrar" onPress={filterItemsByDate} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar por cliente o número"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+        <Button title="Filtrar" onPress={applyFilters} />
       </View>
       {showDatePicker && (
         <DateTimePicker
@@ -170,6 +182,15 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   dateInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginRight: 10,
+    flex: 1,
+  },
+  searchInput: {
     borderWidth: 1,
     borderColor: '#ccc',
     paddingVertical: 10,
